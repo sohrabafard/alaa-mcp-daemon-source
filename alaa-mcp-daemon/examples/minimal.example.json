@@ -1,0 +1,41 @@
+{
+  "$schema": "../alaa-mcp-daemon.schema.json",
+  "version": 1,
+  "runtime": {
+    "log_dir": "./logs",
+    "state_dir": "./state",
+    "max_parallel_starts": 1
+  },
+  "commands": {
+    "worker": {
+      "program": "REPLACE_WITH_ABSOLUTE_EXECUTABLE_PATH",
+      "args": ["--listen", "${host}:${port}"],
+      "cwd": "${working_directory}"
+    }
+  },
+  "services": [
+    {
+      "id": "example-worker",
+      "command": "worker",
+      "enabled": true,
+      "autostart": false,
+      "vars": {
+        "host": "127.0.0.1",
+        "port": "43000",
+        "working_directory": "REPLACE_WITH_ABSOLUTE_WORKING_DIRECTORY"
+      },
+      "claims": [
+        {
+          "type": "tcp",
+          "host": "${host}",
+          "port": "${port}"
+        }
+      ],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}"
+      }
+    }
+  ]
+}

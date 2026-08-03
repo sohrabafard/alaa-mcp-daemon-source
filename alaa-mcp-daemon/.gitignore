@@ -1,0 +1,8 @@
+/dist/
+/logs/
+/state/
+/alaa-mcp-daemon.json
+*.exe
+*.test
+*.out
+coverage.*

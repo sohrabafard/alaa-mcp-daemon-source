@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:alaa-mcp-daemon:config:v1",
+  "title": "alaa-mcp-daemon configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "runtime",
+    "commands",
+    "services"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "defaults": {
+      "$ref": "#/$defs/defaults"
+    },
+    "commands": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/id"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/command"
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/service"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$"
+    },
+    "duration": {
+      "type": "string",
+      "pattern": "^[+-]?(?:0|(?:[0-9]+(?:\\.[0-9]+)?(?:ns|us|µs|ms|s|m|h))+)$"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "log_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "max_parallel_starts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "watch_interval": {
+          "$ref": "#/$defs/duration"
+        },
+        "reload_debounce": {
+          "$ref": "#/$defs/duration"
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "restart": {
+          "$ref": "#/$defs/restart"
+        },
+        "shutdown": {
+          "$ref": "#/$defs/shutdown"
+        },
+        "logs": {
+          "$ref": "#/$defs/logs"
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "program"
+      ],
+      "properties": {
+        "program": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "env": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[^=\\u0000]+$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "priority": {
+          "enum": [
+            "idle",
+            "below_normal",
+            "normal",
+            "above_normal",
+            "high"
+          ]
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "command"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "description": {
+          "type": "string"
+        },
+        "command": {
+          "$ref": "#/$defs/id"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "autostart": {
+          "type": "boolean"
+        },
+        "vars": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/claim"
+          }
+        },
+        "exclusive_keys": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "readiness": {
+          "$ref": "#/$defs/probe"
+        },
+        "restart": {
+          "$ref": "#/$defs/restart"
+        },
+        "shutdown": {
+          "$ref": "#/$defs/shutdown"
+        },
+        "logs": {
+          "$ref": "#/$defs/logs"
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "port"
+      ],
+      "properties": {
+        "type": {
+          "const": "tcp"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "process",
+            "tcp",
+            "http"
+          ]
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allowed_statuses": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "uniqueItems": true
+        },
+        "startup_timeout": {
+          "$ref": "#/$defs/duration"
+        },
+        "interval": {
+          "$ref": "#/$defs/duration"
+        },
+        "timeout": {
+          "$ref": "#/$defs/duration"
+        },
+        "failure_threshold": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "restart": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "enum": [
+            "always",
+            "on_failure",
+            "never"
+          ]
+        },
+        "max_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "window": {
+          "$ref": "#/$defs/duration"
+        },
+        "backoff_initial": {
+          "$ref": "#/$defs/duration"
+        },
+        "backoff_max": {
+          "$ref": "#/$defs/duration"
+        }
+      }
+    },
+    "shutdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "grace_period": {
+          "$ref": "#/$defs/duration"
+        }
+      }
+    },
+    "logs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_bytes": {
+          "type": "integer",
+          "minimum": 65536,
+          "maximum": 10737418240
+        },
+        "backups": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    }
+  }
+}
