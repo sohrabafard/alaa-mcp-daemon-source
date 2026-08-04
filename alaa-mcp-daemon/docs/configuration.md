@@ -80,7 +80,7 @@ A claim requires:
 
 Hosts must be `localhost` or a literal IPv4/IPv6 loopback address. `localhost` normalizes to `127.0.0.1`. Ports must expand to an integer from 1 through 65535.
 
-A claim is a safety declaration, not a reservation. The daemon briefly binds it during preflight, closes the check socket, then starts the process. The managed process remains responsible for binding its endpoint.
+A claim is a safety declaration, not a reservation. The daemon briefly binds it during preflight, closes the check socket, then starts the process. The managed process remains responsible for binding its endpoint. If the endpoint is occupied, the daemon never kills its owner; it retries within the service's restart budget so a previous process that is still releasing the port does not leave the service permanently blocked.
 
 ## Exclusive keys
 
@@ -168,4 +168,4 @@ Metadata fields:
 
 Config parsing and semantic validation have no retry budget: one invalid candidate is read up to four times to tolerate atomic-write windows, then rejected. It is retried only after another file change or explicit `reload`.
 
-A managed service uses its declared restart budget. A deterministic preflight failure transitions directly to `blocked` without consuming repeated restart attempts.
+A managed service uses its declared restart budget. Missing executables and working directories transition directly to `blocked` without consuming repeated restart attempts. An occupied TCP claim is retryable because a previous managed process may still be releasing it; persistent occupancy exhausts the budget and transitions to `failed` without launching or disturbing the foreign owner.

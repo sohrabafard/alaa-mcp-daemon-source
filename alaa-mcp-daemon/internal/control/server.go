@@ -30,6 +30,10 @@ type Handler interface {
 	LogPaths(serviceID string) (string, string, error)
 }
 
+type gracefulCloser interface {
+	CloseGracefully() error
+}
+
 type Server struct {
 	listener    Listener
 	handler     Handler
@@ -38,6 +42,7 @@ type Server struct {
 	wg          sync.WaitGroup
 	connMu      sync.Mutex
 	connections map[io.ReadWriteCloser]struct{}
+	stopping    bool
 }
 
 func NewServer(listener Listener, handler Handler, logger *slog.Logger, onShutdown func()) *Server {
@@ -56,6 +61,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	go func() {
 		<-ctx.Done()
+		s.stopAccepting()
 		_ = s.listener.Close()
 		s.closeConnections()
 	}()
@@ -71,12 +77,12 @@ func (s *Server) Run(ctx context.Context) error {
 			_ = conn.Close()
 			break
 		}
-		s.trackConnection(conn)
-		s.wg.Add(1)
+		if !s.trackConnection(conn) {
+			_ = conn.Close()
+			break
+		}
 		go func() {
 			defer s.wg.Done()
-			defer s.untrackConnection(conn)
-			defer conn.Close()
 			s.serveConn(ctx, conn)
 		}()
 	}
@@ -85,36 +91,35 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) serveConn(ctx context.Context, conn io.ReadWriteCloser) {
+	graceful := false
+	defer func() { s.closeConnection(conn, graceful) }()
 	timedOut := make(chan struct{})
 	timer := time.AfterFunc(requestReadTimeout, func() {
 		close(timedOut)
-		_ = conn.Close()
+		s.closeConnection(conn, false)
 	})
 	reader := bufio.NewReader(io.LimitReader(conn, maxMessageBytes+1))
 	line, err := reader.ReadBytes('\n')
 	if !timer.Stop() {
-		select {
-		case <-timedOut:
-			return
-		default:
-		}
+		<-timedOut
+		return
 	}
 	if err != nil && !errors.Is(err, io.EOF) {
 		if ctx.Err() != nil {
 			return
 		}
-		s.write(conn, Response{Version: ProtocolVersion, Error: "invalid request: " + err.Error()})
+		graceful = s.write(conn, Response{Version: ProtocolVersion, Error: "invalid request: " + err.Error()})
 		return
 	}
 	if len(line) > maxMessageBytes {
-		s.write(conn, Response{Version: ProtocolVersion, Error: "invalid request: message exceeds size limit"})
+		graceful = s.write(conn, Response{Version: ProtocolVersion, Error: "invalid request: message exceeds size limit"})
 		return
 	}
 	dec := json.NewDecoder(bytes.NewReader(line))
 	dec.DisallowUnknownFields()
 	var request Request
 	if err := dec.Decode(&request); err != nil {
-		s.write(conn, Response{Version: ProtocolVersion, Error: "invalid request: " + err.Error()})
+		graceful = s.write(conn, Response{Version: ProtocolVersion, Error: "invalid request: " + err.Error()})
 		return
 	}
 	var trailing any
@@ -122,20 +127,26 @@ func (s *Server) serveConn(ctx context.Context, conn io.ReadWriteCloser) {
 		if err == nil {
 			err = errors.New("trailing JSON value")
 		}
-		s.write(conn, Response{Version: ProtocolVersion, Error: "invalid request: " + err.Error()})
+		graceful = s.write(conn, Response{Version: ProtocolVersion, Error: "invalid request: " + err.Error()})
 		return
 	}
-	s.write(conn, s.handle(request))
+	response, afterResponse := s.handle(request)
+	graceful = s.write(conn, response)
+	if afterResponse != nil {
+		s.closeConnection(conn, graceful)
+		afterResponse()
+	}
 }
 
-func (s *Server) handle(request Request) Response {
+func (s *Server) handle(request Request) (Response, func()) {
 	response := Response{Version: ProtocolVersion}
 	if request.Version != ProtocolVersion {
 		response.Error = fmt.Sprintf("unsupported protocol version %d", request.Version)
-		return response
+		return response, nil
 	}
 	command := strings.ToLower(strings.TrimSpace(request.Command))
 	var err error
+	var afterResponse func()
 	switch command {
 	case "status":
 		var status model.DaemonStatus
@@ -165,17 +176,17 @@ func (s *Server) handle(request Request) Response {
 		if s.onShutdown == nil {
 			err = errors.New("shutdown is unavailable")
 		} else {
-			s.onShutdown()
+			afterResponse = s.onShutdown
 		}
 	default:
 		err = fmt.Errorf("unknown command %q", request.Command)
 	}
 	if err != nil {
 		response.Error = err.Error()
-		return response
+		return response, nil
 	}
 	response.OK = true
-	return response
+	return response, afterResponse
 }
 
 func requireService(service string, fn func(string) error) error {
@@ -185,23 +196,47 @@ func requireService(service string, fn func(string) error) error {
 	return fn(service)
 }
 
-func (s *Server) trackConnection(conn io.ReadWriteCloser) {
+func (s *Server) trackConnection(conn io.ReadWriteCloser) bool {
 	s.connMu.Lock()
+	defer s.connMu.Unlock()
+	if s.stopping {
+		return false
+	}
 	s.connections[conn] = struct{}{}
+	s.wg.Add(1)
+	return true
+}
+
+func (s *Server) stopAccepting() {
+	s.connMu.Lock()
+	s.stopping = true
 	s.connMu.Unlock()
 }
 
-func (s *Server) untrackConnection(conn io.ReadWriteCloser) {
+func (s *Server) closeConnection(conn io.ReadWriteCloser, graceful bool) {
 	s.connMu.Lock()
+	if _, tracked := s.connections[conn]; !tracked {
+		s.connMu.Unlock()
+		return
+	}
 	delete(s.connections, conn)
 	s.connMu.Unlock()
+	if graceful {
+		if closer, ok := conn.(gracefulCloser); ok {
+			_ = closer.CloseGracefully()
+			return
+		}
+	}
+	_ = conn.Close()
 }
 
 func (s *Server) closeConnections() {
 	s.connMu.Lock()
+	s.stopping = true
 	connections := make([]io.ReadWriteCloser, 0, len(s.connections))
 	for conn := range s.connections {
 		connections = append(connections, conn)
+		delete(s.connections, conn)
 	}
 	s.connMu.Unlock()
 	for _, conn := range connections {
@@ -209,8 +244,10 @@ func (s *Server) closeConnections() {
 	}
 }
 
-func (s *Server) write(w io.Writer, response Response) {
+func (s *Server) write(w io.Writer, response Response) bool {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		s.logger.Warn("write control response", "error", err)
+		return false
 	}
+	return true
 }

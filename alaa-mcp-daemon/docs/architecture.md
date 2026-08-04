@@ -97,7 +97,7 @@ The process probe proves only that the root process has not exited. The TCP prob
 
 ## Restart budget
 
-Each failure is recorded in a rolling window. Backoff doubles from `backoff_initial` to `backoff_max`. Reaching `max_attempts` transitions to `Failed`. Intentional process restarts caused by config or CLI commands do not consume the failure budget.
+Each failure is recorded in a rolling window. Backoff doubles from `backoff_initial` to `backoff_max`. Reaching `max_attempts` transitions to `Failed`. A preflight TCP-claim collision uses this same bounded path, allowing recovery when an old process releases its endpoint while remaining fail-closed against a persistent foreign owner. Intentional process restarts caused by config or CLI commands do not consume the failure budget.
 
 ## Stop completion
 

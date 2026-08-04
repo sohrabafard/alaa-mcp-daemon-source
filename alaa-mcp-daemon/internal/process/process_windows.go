@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,28 +19,44 @@ import (
 )
 
 const (
-	createSuspended           = 0x00000004
-	createNoWindow            = 0x08000000
-	startupUseStdHandles      = 0x00000100
-	waitObject0               = 0x00000000
-	waitFailed                = 0xFFFFFFFF
-	infinite                  = 0xFFFFFFFF
-	jobObjectExtendedLimit    = 9
-	jobObjectLimitKillOnClose = 0x00002000
+	createSuspended               = 0x00000004
+	createNoWindow                = 0x08000000
+	extendedStartupInfoPresent    = 0x00080000
+	startupUseStdHandles          = 0x00000100
+	procThreadAttributeHandleList = 0x00020002
+	waitObject0                   = 0x00000000
+	waitFailed                    = 0xFFFFFFFF
+	infinite                      = 0xFFFFFFFF
+	jobObjectExtendedLimit        = 9
+	jobObjectLimitKillOnClose     = 0x00002000
 )
 
 var (
-	kernel32                     = syscall.NewLazyDLL("kernel32.dll")
-	procCreateJobObjectW         = kernel32.NewProc("CreateJobObjectW")
-	procSetInformationJobObject  = kernel32.NewProc("SetInformationJobObject")
-	procAssignProcessToJobObject = kernel32.NewProc("AssignProcessToJobObject")
-	procTerminateJobObject       = kernel32.NewProc("TerminateJobObject")
-	procResumeThread             = kernel32.NewProc("ResumeThread")
-	procWaitForSingleObject      = kernel32.NewProc("WaitForSingleObject")
-	procGetExitCodeProcess       = kernel32.NewProc("GetExitCodeProcess")
-	procGenerateConsoleCtrlEvent = kernel32.NewProc("GenerateConsoleCtrlEvent")
-	procSetPriorityClass         = kernel32.NewProc("SetPriorityClass")
+	kernel32                              = syscall.NewLazyDLL("kernel32.dll")
+	procCreateJobObjectW                  = kernel32.NewProc("CreateJobObjectW")
+	procSetInformationJobObject           = kernel32.NewProc("SetInformationJobObject")
+	procAssignProcessToJobObject          = kernel32.NewProc("AssignProcessToJobObject")
+	procTerminateJobObject                = kernel32.NewProc("TerminateJobObject")
+	procResumeThread                      = kernel32.NewProc("ResumeThread")
+	procWaitForSingleObject               = kernel32.NewProc("WaitForSingleObject")
+	procGetExitCodeProcess                = kernel32.NewProc("GetExitCodeProcess")
+	procGenerateConsoleCtrlEvent          = kernel32.NewProc("GenerateConsoleCtrlEvent")
+	procSetPriorityClass                  = kernel32.NewProc("SetPriorityClass")
+	procInitializeProcThreadAttributeList = kernel32.NewProc("InitializeProcThreadAttributeList")
+	procUpdateProcThreadAttribute         = kernel32.NewProc("UpdateProcThreadAttribute")
+	procDeleteProcThreadAttributeList     = kernel32.NewProc("DeleteProcThreadAttributeList")
 )
+
+type startupInfoEx struct {
+	syscall.StartupInfo
+	attributeList unsafe.Pointer
+}
+
+type procThreadAttributeList struct {
+	data    unsafe.Pointer
+	backing []uintptr
+	values  []unsafe.Pointer
+}
 
 type jobObjectBasicLimitInformation struct {
 	PerProcessUserTimeLimit int64
@@ -72,6 +89,10 @@ type jobObjectExtendedLimitInformation struct {
 }
 
 func (DefaultLauncher) Start(spec Spec) (Handle, error) {
+	return startWindows(spec, nil)
+}
+
+func startWindows(spec Spec, beforeCreate func()) (Handle, error) {
 	program, err := resolveProgram(spec.Program)
 	if err != nil {
 		return nil, err
@@ -138,17 +159,39 @@ func (DefaultLauncher) Start(spec Spec) (Handle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode environment: %w", err)
 	}
-	startup := &syscall.StartupInfo{
-		Cb:        uint32(unsafe.Sizeof(syscall.StartupInfo{})),
-		Flags:     startupUseStdHandles,
-		StdInput:  stdin,
-		StdOutput: stdoutW,
-		StdErr:    stderrW,
+	handles := []syscall.Handle{stdin, stdoutW, stderrW}
+	attributes, err := newProcThreadAttributeList(1)
+	if err != nil {
+		return nil, err
+	}
+	defer attributes.delete()
+	if err := attributes.update(
+		procThreadAttributeHandleList,
+		unsafe.Pointer(&handles[0]),
+		uintptr(len(handles))*unsafe.Sizeof(handles[0]),
+	); err != nil {
+		return nil, err
+	}
+	startup := &startupInfoEx{
+		StartupInfo: syscall.StartupInfo{
+			Cb:        uint32(unsafe.Sizeof(startupInfoEx{})),
+			Flags:     startupUseStdHandles,
+			StdInput:  stdin,
+			StdOutput: stdoutW,
+			StdErr:    stderrW,
+		},
+		attributeList: attributes.data,
 	}
 	var info syscall.ProcessInformation
-	flags := uint32(createSuspended | syscall.CREATE_NEW_PROCESS_GROUP | syscall.CREATE_UNICODE_ENVIRONMENT | createNoWindow)
-	if err := syscall.CreateProcess(programPtr, commandPtr, nil, nil, true, flags, &envBlock[0], cwdPtr, startup, &info); err != nil {
-		return nil, fmt.Errorf("CreateProcessW: %w", err)
+	flags := uint32(createSuspended | syscall.CREATE_NEW_PROCESS_GROUP | syscall.CREATE_UNICODE_ENVIRONMENT | createNoWindow | extendedStartupInfoPresent)
+	if beforeCreate != nil {
+		beforeCreate()
+	}
+	createErr := syscall.CreateProcess(programPtr, commandPtr, nil, nil, true, flags, &envBlock[0], cwdPtr, &startup.StartupInfo, &info)
+	runtime.KeepAlive(handles)
+	runtime.KeepAlive(attributes)
+	if createErr != nil {
+		return nil, fmt.Errorf("CreateProcessW: %w", createErr)
 	}
 	processCreated := true
 	defer func() {
@@ -203,6 +246,70 @@ func (DefaultLauncher) Start(spec Spec) (Handle, error) {
 	info.Process = 0
 	go h.wait()
 	return h, nil
+}
+
+func newProcThreadAttributeList(maxAttributeCount uint32) (*procThreadAttributeList, error) {
+	var size uintptr
+	r1, _, callErr := procInitializeProcThreadAttributeList.Call(
+		0,
+		uintptr(maxAttributeCount),
+		0,
+		uintptr(unsafe.Pointer(&size)),
+	)
+	if r1 != 0 || !errors.Is(callErr, syscall.ERROR_INSUFFICIENT_BUFFER) {
+		return nil, fmt.Errorf("query InitializeProcThreadAttributeList size: %w", callErr)
+	}
+	if size == 0 {
+		return nil, errors.New("InitializeProcThreadAttributeList returned an empty allocation size")
+	}
+	wordSize := unsafe.Sizeof(uintptr(0))
+	maxInt := int(^uint(0) >> 1)
+	if size > uintptr(maxInt) {
+		return nil, fmt.Errorf("process attribute list size %d exceeds platform allocation limit", size)
+	}
+	wordCount := (size + wordSize - 1) / wordSize
+	backing := make([]uintptr, int(wordCount))
+	attributes := &procThreadAttributeList{
+		data:    unsafe.Pointer(&backing[0]),
+		backing: backing,
+	}
+	r1, _, callErr = procInitializeProcThreadAttributeList.Call(
+		uintptr(attributes.data),
+		uintptr(maxAttributeCount),
+		0,
+		uintptr(unsafe.Pointer(&size)),
+	)
+	if r1 == 0 {
+		return nil, fmt.Errorf("InitializeProcThreadAttributeList: %w", callErr)
+	}
+	return attributes, nil
+}
+
+func (attributes *procThreadAttributeList) update(attribute uintptr, value unsafe.Pointer, size uintptr) error {
+	r1, _, callErr := procUpdateProcThreadAttribute.Call(
+		uintptr(attributes.data),
+		0,
+		attribute,
+		uintptr(value),
+		size,
+		0,
+		0,
+	)
+	if r1 == 0 {
+		return fmt.Errorf("UpdateProcThreadAttribute: %w", callErr)
+	}
+	attributes.values = append(attributes.values, value)
+	return nil
+}
+
+func (attributes *procThreadAttributeList) delete() {
+	if attributes.data == nil {
+		return
+	}
+	procDeleteProcThreadAttributeList.Call(uintptr(attributes.data))
+	attributes.data = nil
+	attributes.backing = nil
+	attributes.values = nil
 }
 
 func resolveProgram(program string) (string, error) {

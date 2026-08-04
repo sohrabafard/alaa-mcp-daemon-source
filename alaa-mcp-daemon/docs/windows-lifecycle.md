@@ -7,7 +7,9 @@ For each service, the process backend performs this order:
 1. Resolve and stat the executable.
 2. Create inheritable stdout/stderr pipes and a `NUL` stdin handle.
 3. Create an unnamed Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
-4. Call `CreateProcessW` with the root process suspended and in a new process group.
+4. Call `CreateProcessW` with the root process suspended and in a new process group. The
+   `STARTUPINFOEX` handle list limits inheritance to that child's stdin, stdout, and stderr;
+   unrelated inheritable handles from concurrently starting siblings are not propagated.
 5. Assign the suspended root process to the Job Object.
 6. Apply the configured Windows priority class.
 7. Resume the root thread.
@@ -47,7 +49,14 @@ The Windows CLI uses a named pipe keyed by the canonical config path. The pipe s
 - the current user's SID;
 - LocalSystem.
 
-The pipe uses `PIPE_REJECT_REMOTE_CLIENTS`. One request and one response are exchanged per connection.
+The pipe uses `PIPE_REJECT_REMOTE_CLIENTS`. One request and one response are exchanged per
+connection. Completed responses close the pipe handle directly; no separate
+`DisconnectNamedPipe` call is required.
+
+Connection admission and shutdown snapshots are serialized with the server mutex and tracked by
+the server `WaitGroup`. A shutdown response is completed and its connection is closed before the
+shutdown callback cancels the server context. Closing a tracked handle is idempotent, so a stalled
+read is unblocked by the same handle close used during shutdown.
 
 ## Single-instance boundary
 
@@ -66,6 +75,10 @@ A named `Local\` mutex keyed by canonical config path prevents two daemon proces
 - executable working directory set to the executable's directory.
 
 The task action is an absolute executable path plus `run --config <absolute-path>`. The daemon's own mutex remains the final duplicate-instance gate.
+
+The registration XML is emitted as UTF-16 little-endian with an `FF FE` BOM and an XML
+declaration of `encoding="UTF-16"`, preserving Unicode executable and configuration paths for
+Task Scheduler.
 
 ## Native validation requirement
 

@@ -54,7 +54,15 @@ func TestWindowsNamedPipeControlRoundTrip(t *testing.T) {
 		cancel()
 		t.Fatalf("response=%#v", response)
 	}
-	cancel()
+	response, err = Call(configPath, state, Request{Command: "shutdown"}, 2*time.Second)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	if !response.OK {
+		cancel()
+		t.Fatalf("response=%#v", response)
+	}
 	select {
 	case err := <-done:
 		if err != nil {

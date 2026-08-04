@@ -49,8 +49,9 @@ type namedPipeListener struct {
 }
 
 type pipeConn struct {
-	file   *os.File
-	server bool
+	file      *os.File
+	closeOnce sync.Once
+	closeErr  error
 }
 
 func Listen(configPath, stateDir string) (Listener, string, error) {
@@ -101,7 +102,7 @@ func (l *namedPipeListener) Accept() (io.ReadWriteCloser, error) {
 		_ = syscall.CloseHandle(handle)
 		return nil, os.ErrClosed
 	}
-	return &pipeConn{file: os.NewFile(uintptr(handle), l.name), server: true}, nil
+	return &pipeConn{file: os.NewFile(uintptr(handle), l.name)}, nil
 }
 
 func (l *namedPipeListener) Close() error {
@@ -127,14 +128,19 @@ func (l *namedPipeListener) Close() error {
 
 func (c *pipeConn) Read(p []byte) (int, error)  { return c.file.Read(p) }
 func (c *pipeConn) Write(p []byte) (int, error) { return c.file.Write(p) }
-func (c *pipeConn) Close() error {
+
+func (c *pipeConn) Close() error { return c.close() }
+
+func (c *pipeConn) CloseGracefully() error { return c.close() }
+
+func (c *pipeConn) close() error {
 	if c == nil || c.file == nil {
 		return nil
 	}
-	if c.server {
-		_, _, _ = procDisconnectNamedPipe.Call(c.file.Fd())
-	}
-	return c.file.Close()
+	c.closeOnce.Do(func() {
+		c.closeErr = c.file.Close()
+	})
+	return c.closeErr
 }
 
 func createPipeInstance(name *uint16, security *syscall.SecurityAttributes) (syscall.Handle, error) {

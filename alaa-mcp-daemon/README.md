@@ -7,7 +7,7 @@ Version 1 is designed for one current-user daemon, one configuration file, and m
 ## Operational guarantees
 
 - Every managed Windows process is created suspended, assigned to its own Job Object, and then resumed. Closing the daemon's Job Object handle terminates the complete descendant process tree.
-- Only declared process trees may be terminated. A foreign process occupying a claimed port is reported as `blocked` and is never killed.
+- Only declared process trees may be terminated. A foreign process occupying a claimed port is never killed; the service retries within its bounded restart budget and fails closed if the port stays occupied.
 - Configuration is decoded with unknown-field and duplicate-key rejection. A malformed reload never replaces the last-known-good configuration.
 - Command arguments are passed as an argument array. No implicit `cmd.exe`, PowerShell, or shell-string evaluation occurs.
 - TCP claims and TCP/HTTP probes are restricted to loopback addresses.
@@ -166,9 +166,9 @@ disabled -> stopped -> starting -> ready
                          +-> failed
 ```
 
-- `blocked`: a deterministic prerequisite failed, such as a missing executable, missing working directory, or occupied declared port. The daemon does not retry until `start`, `restart`, or a relevant config change.
+- `blocked`: a deterministic prerequisite failed, such as a missing executable or missing working directory. The daemon does not retry until `start`, `restart`, or a relevant config change.
 - `failed`: the restart budget was exhausted or restart policy prohibited another attempt.
-- `backoff`: the service failed and is waiting for its next permitted attempt.
+- `backoff`: the service failed and is waiting for its next permitted attempt. This includes a claimed port that may still be releasing from a previous process.
 - `stopping`: completion waits for both root-process exit and process-backend cleanup, including declared-port release checks.
 
 ## Hot reload behavior

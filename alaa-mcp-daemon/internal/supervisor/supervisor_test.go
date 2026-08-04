@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -109,7 +110,7 @@ func TestCrashLoopExhaustsRetryBudget(t *testing.T) {
 	}
 }
 
-func TestForeignPortBlocksWithoutLaunching(t *testing.T) {
+func TestPermanentForeignPortExhaustsRetryBudgetWithoutLaunching(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -119,20 +120,90 @@ func TestForeignPortBlocksWithoutLaunching(t *testing.T) {
 	launcher := &fakeLauncher{}
 	spec := baseService(t)
 	spec.Claims = []config.TCPClaim{{Host: "127.0.0.1", Port: port}}
+	spec.Restart = config.EffectiveRestartPolicy{
+		Policy:         "always",
+		MaxAttempts:    3,
+		Window:         time.Second,
+		BackoffInitial: time.Millisecond,
+		BackoffMax:     2 * time.Millisecond,
+	}
 	sup := newTestSupervisor(t, launcher, spec)
 	defer shutdownTestSupervisor(t, sup)
-	status := waitState(t, sup, model.StateBlocked)
+	status := waitState(t, sup, model.StateFailed)
 	if got := launcher.starts.Load(); got != 0 {
 		t.Fatalf("launcher called %d times", got)
 	}
-	if status.LastError == "" {
-		t.Fatal("expected blocked reason")
+	if status.FailuresInWindow != 3 {
+		t.Fatalf("preflight failures=%d want=3", status.FailuresInWindow)
+	}
+	if !strings.Contains(status.LastError, "claimed endpoint") {
+		t.Fatalf("missing occupied-endpoint cause: %s", status.LastError)
 	}
 	conn, err := net.DialTimeout("tcp", listener.Addr().String(), 100*time.Millisecond)
 	if err != nil {
 		t.Fatalf("foreign listener was disturbed: %v", err)
 	}
 	_ = conn.Close()
+}
+
+func TestMissingWorkingDirectoryRemainsBlockedWithoutRetry(t *testing.T) {
+	launcher := &fakeLauncher{}
+	spec := baseService(t)
+	spec.Cwd = filepath.Join(t.TempDir(), "missing")
+	sup := newTestSupervisor(t, launcher, spec)
+	defer shutdownTestSupervisor(t, sup)
+
+	status := waitState(t, sup, model.StateBlocked)
+	if got := launcher.starts.Load(); got != 0 {
+		t.Fatalf("launcher called for a missing working directory; starts=%d", got)
+	}
+	if status.FailuresInWindow != 0 || status.RestartCount != 0 || status.BackoffUntil != nil {
+		t.Fatalf("deterministic preflight failure was retried: %#v", status)
+	}
+	if !strings.Contains(status.LastError, "working directory") {
+		t.Fatalf("missing working-directory cause: %s", status.LastError)
+	}
+}
+
+func TestTransientForeignPortIsRetriedAfterRelease(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	launcher := &fakeLauncher{}
+	spec := baseService(t)
+	spec.Claims = []config.TCPClaim{{Host: "127.0.0.1", Port: port}}
+	spec.Restart = config.EffectiveRestartPolicy{
+		Policy:         "always",
+		MaxAttempts:    5,
+		Window:         time.Second,
+		BackoffInitial: 5 * time.Millisecond,
+		BackoffMax:     20 * time.Millisecond,
+	}
+	sup := newTestSupervisor(t, launcher, spec)
+	defer shutdownTestSupervisor(t, sup)
+
+	preflightFailure := waitFor(t, sup, func(status model.ServiceStatus) bool {
+		return strings.Contains(status.LastError, "claimed endpoint")
+	})
+	if got := launcher.starts.Load(); got != 0 {
+		_ = listener.Close()
+		t.Fatalf("launcher called while the claimed port was occupied; starts=%d status=%#v", got, preflightFailure)
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	ready := waitFor(t, sup, func(status model.ServiceStatus) bool {
+		return status.State == model.StateReady && launcher.starts.Load() == 1
+	})
+	if ready.LastError != "" {
+		t.Fatalf("transient claim error survived successful recovery: %s", ready.LastError)
+	}
+	if got := launcher.starts.Load(); got != 1 {
+		t.Fatalf("transient claim recovery launched %d processes; want exactly 1", got)
+	}
 }
 
 func TestProcessApplyRestartsWithoutConsumingFailureBudget(t *testing.T) {

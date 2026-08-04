@@ -829,7 +829,10 @@ func preflight(spec config.EffectiveService) (string, bool, error) {
 	for _, claim := range spec.Claims {
 		listener, listenErr := net.Listen("tcp", net.JoinHostPort(claim.Host, strconv.Itoa(claim.Port)))
 		if listenErr != nil {
-			return executable, true, fmt.Errorf("claimed endpoint %s:%d is occupied: %w", claim.Host, claim.Port, listenErr)
+			// A previous managed process may still be releasing its endpoint. Treat
+			// occupancy as retryable so the bounded restart policy can recover once
+			// the port becomes free; missing programs and directories remain blocked.
+			return executable, false, fmt.Errorf("claimed endpoint %s:%d is occupied: %w", claim.Host, claim.Port, listenErr)
 		}
 		_ = listener.Close()
 	}

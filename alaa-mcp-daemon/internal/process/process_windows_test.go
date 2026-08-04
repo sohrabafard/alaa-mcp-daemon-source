@@ -25,9 +25,12 @@ func TestWindowsHelperProcess(t *testing.T) {
 	if mode == "" {
 		return
 	}
-	if mode == "parent" {
+	switch mode {
+	case "exit":
+		return
+	case "parent":
 		command := exec.Command(os.Args[0], "-test.run=^TestWindowsHelperProcess$")
-		command.Env = append(os.Environ(), windowsHelperEnv+"=child")
+		command.Env = append(os.Environ(), windowsHelperEnv+"=block")
 		if err := command.Start(); err != nil {
 			os.Exit(91)
 		}
@@ -36,12 +39,87 @@ func TestWindowsHelperProcess(t *testing.T) {
 			_ = command.Process.Kill()
 			os.Exit(92)
 		}
-		for {
-			time.Sleep(time.Hour)
-		}
 	}
-	for {
-		time.Sleep(time.Hour)
+	blockWindowsHelper()
+}
+
+func blockWindowsHelper() {
+	createEvent := syscall.NewLazyDLL("kernel32.dll").NewProc("CreateEventW")
+	event, _, _ := createEvent.Call(0, 1, 0, 0)
+	if event == 0 {
+		os.Exit(93)
+	}
+	defer syscall.CloseHandle(syscall.Handle(event))
+	result, _, _ := procWaitForSingleObject.Call(event, infinite)
+	if uint32(result) != waitObject0 {
+		os.Exit(94)
+	}
+}
+
+func TestWindowsLauncher_ConcurrentStartsDoNotKeepExitedSiblingOpen(t *testing.T) {
+	beforeCreate := make(chan struct{})
+	allowCreate := make(chan struct{})
+	exitedCwd := t.TempDir()
+	longLivedCwd := t.TempDir()
+	type startResult struct {
+		handle Handle
+		err    error
+	}
+	exitedStart := make(chan startResult, 1)
+	go func() {
+		handle, err := startWindows(Spec{
+			Program:  os.Args[0],
+			Args:     []string{"-test.run=^TestWindowsHelperProcess$"},
+			Cwd:      exitedCwd,
+			Env:      map[string]string{windowsHelperEnv: "exit"},
+			Priority: "normal",
+			Stdout:   io.Discard,
+			Stderr:   io.Discard,
+		}, func() {
+			close(beforeCreate)
+			<-allowCreate
+		})
+		exitedStart <- startResult{handle: handle, err: err}
+	}()
+
+	select {
+	case <-beforeCreate:
+	case exited := <-exitedStart:
+		t.Fatalf("start exited sibling before CreateProcessW: %v", exited.err)
+	}
+	longLived, err := NewLauncher().Start(Spec{
+		Program:  os.Args[0],
+		Args:     []string{"-test.run=^TestWindowsHelperProcess$"},
+		Cwd:      longLivedCwd,
+		Env:      map[string]string{windowsHelperEnv: "block"},
+		Priority: "normal",
+		Stdout:   io.Discard,
+		Stderr:   io.Discard,
+	})
+	if err != nil {
+		close(allowCreate)
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = longLived.Kill() })
+
+	close(allowCreate)
+	exited := <-exitedStart
+	if exited.err != nil {
+		t.Fatal(exited.err)
+	}
+	t.Cleanup(func() { _ = exited.handle.Kill() })
+
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	select {
+	case <-exited.handle.Done():
+	case <-deadline.C:
+		t.Fatal("exited sibling's Done remained blocked while a concurrent sibling was alive")
+	}
+	select {
+	case <-longLived.Done():
+		t.Fatal("long-lived sibling exited before the exited sibling's Done closed")
+	default:
 	}
 }
 

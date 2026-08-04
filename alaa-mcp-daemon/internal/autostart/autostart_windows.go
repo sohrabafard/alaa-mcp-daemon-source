@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"unicode/utf16"
 
 	"alaa-mcp-daemon/internal/winapi"
 )
@@ -67,15 +68,26 @@ func buildTaskXML(executable, configPath, sid string) ([]byte, error) {
 		},
 		Actions: actions{Context: "Author", Exec: execAction{Command: executable, Arguments: arguments, WorkingDirectory: filepath.Dir(executable)}},
 	}
-	var buf bytes.Buffer
-	buf.WriteString(xml.Header)
-	encoder := xml.NewEncoder(&buf)
+	var xmlBuf bytes.Buffer
+	xmlBuf.WriteString("<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n")
+	encoder := xml.NewEncoder(&xmlBuf)
 	encoder.Indent("", "  ")
 	if err := encoder.Encode(doc); err != nil {
 		return nil, fmt.Errorf("encode task XML: %w", err)
 	}
-	buf.WriteByte('\n')
-	return buf.Bytes(), nil
+	xmlBuf.WriteByte('\n')
+	return encodeUTF16LEWithBOM(xmlBuf.String()), nil
+}
+
+func encodeUTF16LEWithBOM(value string) []byte {
+	codeUnits := utf16.Encode([]rune(value))
+	encoded := make([]byte, 2+len(codeUnits)*2)
+	encoded[0], encoded[1] = 0xff, 0xfe
+	for i, codeUnit := range codeUnits {
+		encoded[2+i*2] = byte(codeUnit)
+		encoded[3+i*2] = byte(codeUnit >> 8)
+	}
+	return encoded
 }
 
 func Uninstall(configPath string) (string, error) {
