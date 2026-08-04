@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible daemon defect.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials, private paths, personal data, or security-sensitive details. Security reports must follow the repository security policy, not this form.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Configuration validation
+        - Process supervision or readiness
+        - Control CLI or named-pipe lifecycle
+        - Logging or reload
+        - Task Scheduler autostart
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Daemon version and Windows version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: Include the sanitized configuration shape and exact command. Do not include private paths or credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and redacted logs
+    validations:
+      required: true
+  - type: checkboxes
+    id: disclosure
+    attributes:
+      label: Safe disclosure
+      options:
+        - label: I removed credentials, private paths, personal data, and security-sensitive details.
+          required: true

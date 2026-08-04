@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a focused improvement to a local developer workflow.
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Propose one focused improvement. Do not include credentials, private paths, personal data, or security-sensitive details.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      placeholder: Describe the workflow and why existing configuration or commands are insufficient.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Compatibility and safety considerations
+      placeholder: Note any effects on configuration, process lifecycle, local-only control, or documentation.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

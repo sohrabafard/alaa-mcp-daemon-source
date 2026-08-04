@@ -1,0 +1,27 @@
+# Editor and operating-system state
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+
+# Go build, test, profiling, and coverage output
+bin/
+dist/
+*.exe
+*.dll
+*.test
+*.out
+*.prof
+coverage.*
+
+# Local daemon runtime output and deployment configuration
+alaa-mcp-daemon/dist/
+alaa-mcp-daemon/logs/
+alaa-mcp-daemon/state/
+alaa-mcp-daemon/alaa-mcp-daemon.json
+
+# Local tool caches
+.cache/
+tmp/

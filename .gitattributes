@@ -1,13 +1,32 @@
-* text=auto
+# Store source and documentation as LF. Git materializes the declared EOL in
+# each worktree, so this is also the repository-wide normalization policy.
+* text=auto eol=lf
 
-*.go text eol=lf
-*.mod text eol=lf
-*.sum text eol=lf
-*.sh text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
-*.json text eol=lf
+# Make text classification explicit for the formats maintained in this repo.
+*.go       text eol=lf
+*.mod      text eol=lf
+*.sum      text eol=lf
+*.md       text eol=lf
+*.json     text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.sh       text eol=lf
+*.ps1      text eol=lf
+*.py       text eol=lf
 
-*.bat text eol=crlf
-*.cmd text eol=crlf
-*.ps1 text eol=crlf
+# Windows command processors remain the only deliberate CRLF exception.
+*.bat      text eol=crlf
+*.cmd      text eol=crlf
+
+# Never perform line-ending conversion on binary assets or archives.
+*.exe      -text
+*.dll      -text
+*.pdb      -text
+*.png      -text
+*.jpg      -text
+*.jpeg     -text
+*.gif      -text
+*.ico      -text
+*.zip      -text
+*.gz       -text
+*.7z       -text
