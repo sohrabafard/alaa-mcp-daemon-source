@@ -4,7 +4,7 @@
   "runtime": {
     "log_dir": "./logs",
     "state_dir": "./state",
-    "max_parallel_starts": 2,
+    "max_parallel_starts": 1,
     "watch_interval": "1s",
     "reload_debounce": "250ms"
   },
