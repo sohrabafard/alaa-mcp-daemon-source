@@ -11,3 +11,5 @@ Relative paths resolve from the configuration file directory, not the caller's w
 Start with [minimal.example.json](../examples/minimal.example.json), then read [runtime and command templates](./configuration/10-runtime-and-command-templates.md), [services and probes](./configuration/20-services-and-probes.md), and [policies and reload behavior](./configuration/30-policies-and-reload.md).
 
 For an operator procedure that adds a service without weakening the current configuration, read the [service operations runbook](./operations/10-service-runbook.md).
+
+For one shared self-hosted Sentry stdio process behind a local HTTP endpoint, read the [Sentry MCP setup](./operations/20-sentry-shared-mcp.md) and its [disabled example](../examples/sentry.windows.example.json).

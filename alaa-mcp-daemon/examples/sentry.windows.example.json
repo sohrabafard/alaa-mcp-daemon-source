@@ -1,0 +1,60 @@
+{
+  "$schema": "../alaa-mcp-daemon.schema.json",
+  "version": 1,
+  "runtime": {
+    "log_dir": "./logs",
+    "state_dir": "./state",
+    "max_parallel_starts": 1
+  },
+  "commands": {
+    "sentry-http": {
+      "program": "${node_path}",
+      "args": [
+        "--env-file=${config_dir}/sentry.env",
+        "${proxy_script}",
+        "--host", "${host}",
+        "--port", "${port}",
+        "--server", "stream",
+        "--endpoint", "/mcp",
+        "--", "${node_path}", "${sentry_script}",
+        "--host", "${sentry_host}",
+        "--insecure-http"
+      ],
+      "cwd": "${config_dir}",
+      "env": {
+        "MCP_SKILLS": "inspect,seer"
+      },
+      "priority": "below_normal"
+    }
+  },
+  "services": [
+    {
+      "id": "sentry",
+      "description": "Shared self-hosted Sentry MCP endpoint through mcp-proxy",
+      "command": "sentry-http",
+      "enabled": false,
+      "autostart": false,
+      "vars": {
+        "node_path": "REPLACE_WITH_ABSOLUTE_NODE_EXECUTABLE_PATH",
+        "proxy_script": "REPLACE_WITH_ABSOLUTE_MCP_PROXY_SCRIPT_PATH",
+        "sentry_script": "REPLACE_WITH_ABSOLUTE_SENTRY_MCP_SCRIPT_PATH",
+        "sentry_host": "REPLACE_WITH_SENTRY_HOST_AND_PORT",
+        "host": "127.0.0.1",
+        "port": "42107"
+      },
+      "claims": [
+        { "type": "tcp", "host": "${host}", "port": "${port}" }
+      ],
+      "exclusive_keys": ["sentry-upstream:${sentry_host}"],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}",
+        "startup_timeout": "90s",
+        "interval": "15s",
+        "timeout": "2s",
+        "failure_threshold": 3
+      }
+    }
+  ]
+}
