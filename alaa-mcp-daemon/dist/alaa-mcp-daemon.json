@@ -77,8 +77,8 @@
       "id": "serena-auth",
       "description": "Shared Serena endpoint for the auth project",
       "command": "serena-http",
-      "enabled": false,
-      "autostart": false,
+      "enabled": true,
+      "autostart": true,
       "vars": {
         "host": "127.0.0.1",
         "port": "42100",
@@ -109,8 +109,8 @@
       "id": "serena-comment",
       "description": "Shared Serena endpoint for the comment service",
       "command": "serena-http",
-      "enabled": false,
-      "autostart": false,
+      "enabled": true,
+      "autostart": true,
       "vars": {
         "host": "127.0.0.1",
         "port": "42101",
@@ -141,8 +141,8 @@
       "id": "serena-content",
       "description": "Shared Serena endpoint for the content project",
       "command": "serena-http",
-      "enabled": false,
-      "autostart": false,
+      "enabled": true,
+      "autostart": true,
       "vars": {
         "host": "127.0.0.1",
         "port": "42102",
