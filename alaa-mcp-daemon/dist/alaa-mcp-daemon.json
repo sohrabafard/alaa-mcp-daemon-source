@@ -1,0 +1,367 @@
+{
+  "$schema": "../alaa-mcp-daemon.schema.json",
+  "version": 1,
+  "runtime": {
+    "log_dir": "./logs",
+    "state_dir": "./state",
+    "max_parallel_starts": 1,
+    "watch_interval": "1s",
+    "reload_debounce": "250ms"
+  },
+  "defaults": {
+    "restart": {
+      "policy": "always",
+      "max_attempts": 5,
+      "window": "60s",
+      "backoff_initial": "1s",
+      "backoff_max": "30s"
+    },
+    "shutdown": {
+      "grace_period": "8s"
+    },
+    "logs": {
+      "max_bytes": 10485760,
+      "backups": 5
+    }
+  },
+  "commands": {
+    "serena-http": {
+      "program": "C:/Users/Alaa/.local/bin/serena.exe",
+      "args": [
+        "start-mcp-server",
+        "--transport",
+        "streamable-http",
+        "--host",
+        "${host}",
+        "--port",
+        "${port}",
+        "--context",
+        "${context}",
+        "--project",
+        "${project_path}",
+        "--open-web-dashboard",
+        "false"
+      ],
+      "cwd": "${project_path}",
+      "priority": "below_normal"
+    },
+    "sentry-http": {
+      "program": "${node_path}",
+      "args": [
+        "--env-file=${config_dir}/sentry.env",
+        "${proxy_script}",
+        "--host",
+        "${host}",
+        "--port",
+        "${port}",
+        "--server",
+        "stream",
+        "--endpoint",
+        "/mcp",
+        "--",
+        "${node_path}",
+        "${sentry_script}",
+        "--host",
+        "${sentry_host}",
+        "--insecure-http"
+      ],
+      "cwd": "${config_dir}",
+      "env": {
+        "MCP_SKILLS": "inspect,seer"
+      },
+      "priority": "below_normal"
+    }
+  },
+  "services": [
+    {
+      "id": "serena-auth",
+      "description": "Shared Serena endpoint for the auth project",
+      "command": "serena-http",
+      "enabled": false,
+      "autostart": false,
+      "vars": {
+        "host": "127.0.0.1",
+        "port": "42100",
+        "context": "ide",
+        "project_path": "D:\\Sohrab\\Project\\auth"
+      },
+      "claims": [
+        {
+          "type": "tcp",
+          "host": "${host}",
+          "port": "${port}"
+        }
+      ],
+      "exclusive_keys": [
+        "serena-project:${project_path}"
+      ],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}",
+        "startup_timeout": "90s",
+        "interval": "15s",
+        "timeout": "2s",
+        "failure_threshold": 3
+      }
+    },
+    {
+      "id": "serena-comment",
+      "description": "Shared Serena endpoint for the comment service",
+      "command": "serena-http",
+      "enabled": false,
+      "autostart": false,
+      "vars": {
+        "host": "127.0.0.1",
+        "port": "42101",
+        "context": "ide",
+        "project_path": "D:\\Sohrab\\Project\\comment-service"
+      },
+      "claims": [
+        {
+          "type": "tcp",
+          "host": "${host}",
+          "port": "${port}"
+        }
+      ],
+      "exclusive_keys": [
+        "serena-project:${project_path}"
+      ],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}",
+        "startup_timeout": "90s",
+        "interval": "15s",
+        "timeout": "2s",
+        "failure_threshold": 3
+      }
+    },
+    {
+      "id": "serena-content",
+      "description": "Shared Serena endpoint for the content project",
+      "command": "serena-http",
+      "enabled": false,
+      "autostart": false,
+      "vars": {
+        "host": "127.0.0.1",
+        "port": "42102",
+        "context": "ide",
+        "project_path": "D:\\Sohrab\\Project\\content"
+      },
+      "claims": [
+        {
+          "type": "tcp",
+          "host": "${host}",
+          "port": "${port}"
+        }
+      ],
+      "exclusive_keys": [
+        "serena-project:${project_path}"
+      ],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}",
+        "startup_timeout": "90s",
+        "interval": "15s",
+        "timeout": "2s",
+        "failure_threshold": 3
+      }
+    },
+    {
+      "id": "serena-entitlement-api",
+      "description": "Shared Serena endpoint for the entitlement-api project",
+      "command": "serena-http",
+      "enabled": true,
+      "autostart": true,
+      "vars": {
+        "host": "127.0.0.1",
+        "port": "42103",
+        "context": "ide",
+        "project_path": "D:\\Sohrab\\Project\\entitlement-api"
+      },
+      "claims": [
+        {
+          "type": "tcp",
+          "host": "${host}",
+          "port": "${port}"
+        }
+      ],
+      "exclusive_keys": [
+        "serena-project:${project_path}"
+      ],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}",
+        "startup_timeout": "90s",
+        "interval": "15s",
+        "timeout": "2s",
+        "failure_threshold": 3
+      }
+    },
+    {
+      "id": "serena-entitlement-projector",
+      "description": "Shared Serena endpoint for the entitlement-projector project",
+      "command": "serena-http",
+      "enabled": true,
+      "autostart": true,
+      "vars": {
+        "host": "127.0.0.1",
+        "port": "42104",
+        "context": "ide",
+        "project_path": "D:\\Sohrab\\Project\\entitlement-projector"
+      },
+      "claims": [
+        {
+          "type": "tcp",
+          "host": "${host}",
+          "port": "${port}"
+        }
+      ],
+      "exclusive_keys": [
+        "serena-project:${project_path}"
+      ],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}",
+        "startup_timeout": "90s",
+        "interval": "15s",
+        "timeout": "2s",
+        "failure_threshold": 3
+      }
+    },
+    {
+      "id": "serena-authz-sidecar",
+      "description": "Shared Serena endpoint for the authz-sidecar project",
+      "command": "serena-http",
+      "enabled": true,
+      "autostart": true,
+      "vars": {
+        "host": "127.0.0.1",
+        "port": "42105",
+        "context": "ide",
+        "project_path": "D:\\Sohrab\\Project\\authz-sidecar"
+      },
+      "claims": [
+        {
+          "type": "tcp",
+          "host": "${host}",
+          "port": "${port}"
+        }
+      ],
+      "exclusive_keys": [
+        "serena-project:${project_path}"
+      ],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}",
+        "startup_timeout": "90s",
+        "interval": "15s",
+        "timeout": "2s",
+        "failure_threshold": 3
+      }
+    },
+    {
+      "id": "serena-authz-openfga",
+      "description": "Shared Serena endpoint for the authz-openfga project",
+      "command": "serena-http",
+      "enabled": true,
+      "autostart": true,
+      "vars": {
+        "host": "127.0.0.1",
+        "port": "42106",
+        "context": "ide",
+        "project_path": "D:\\Sohrab\\Project\\authz-openfga"
+      },
+      "claims": [
+        {
+          "type": "tcp",
+          "host": "${host}",
+          "port": "${port}"
+        }
+      ],
+      "exclusive_keys": [
+        "serena-project:${project_path}"
+      ],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}",
+        "startup_timeout": "90s",
+        "interval": "15s",
+        "timeout": "2s",
+        "failure_threshold": 3
+      }
+    },
+    {
+      "id": "sentry",
+      "description": "Shared self-hosted Sentry MCP endpoint through mcp-proxy",
+      "command": "sentry-http",
+      "enabled": true,
+      "autostart": true,
+      "vars": {
+        "node_path": "C:/Program Files/nodejs/node.exe",
+        "proxy_script": "D:/Sohrab/Project/alaa-mcp-daemon-source/alaa-mcp-daemon/dist/sentry-runtime/node_modules/mcp-proxy/dist/bin/mcp-proxy.mjs",
+        "sentry_script": "D:/Sohrab/Project/alaa-mcp-daemon-source/alaa-mcp-daemon/dist/sentry-runtime/node_modules/@sentry/mcp-server/dist/index.js",
+        "sentry_host": "62.60.191.191:9000",
+        "host": "127.0.0.1",
+        "port": "42107"
+      },
+      "claims": [
+        {
+          "type": "tcp",
+          "host": "${host}",
+          "port": "${port}"
+        }
+      ],
+      "exclusive_keys": [
+        "sentry-upstream:${sentry_host}"
+      ],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}",
+        "startup_timeout": "90s",
+        "interval": "15s",
+        "timeout": "2s",
+        "failure_threshold": 3
+      }
+    },
+    {
+      "id": "serena-alaa-go-chi",
+      "description": "Shared Serena endpoint for the alaa-go-chi project",
+      "command": "serena-http",
+      "enabled": true,
+      "autostart": true,
+      "vars": {
+        "host": "127.0.0.1",
+        "port": "42108",
+        "context": "ide",
+        "project_path": "D:\\Sohrab\\Project\\alaa-go-chi"
+      },
+      "claims": [
+        {
+          "type": "tcp",
+          "host": "${host}",
+          "port": "${port}"
+        }
+      ],
+      "exclusive_keys": [
+        "serena-project:${project_path}"
+      ],
+      "readiness": {
+        "type": "tcp",
+        "host": "${host}",
+        "port": "${port}",
+        "startup_timeout": "90s",
+        "interval": "15s",
+        "timeout": "2s",
+        "failure_threshold": 3
+      }
+    }
+  ]
+}
