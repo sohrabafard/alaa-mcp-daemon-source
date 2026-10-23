@@ -83,7 +83,7 @@
         "host": "127.0.0.1",
         "port": "42100",
         "context": "ide",
-        "project_path": "D:\\Sohrab\\Project\\auth"
+        "project_path": "/home/sohrab/project/auth"
       },
       "claims": [
         {
@@ -115,7 +115,7 @@
         "host": "127.0.0.1",
         "port": "42101",
         "context": "ide",
-        "project_path": "D:\\Sohrab\\Project\\comment-service"
+        "project_path": "/home/sohrab/project/comment-service"
       },
       "claims": [
         {
@@ -147,7 +147,7 @@
         "host": "127.0.0.1",
         "port": "42102",
         "context": "ide",
-        "project_path": "D:\\Sohrab\\Project\\content"
+        "project_path": "/home/sohrab/project/content"
       },
       "claims": [
         {
@@ -179,7 +179,7 @@
         "host": "127.0.0.1",
         "port": "42103",
         "context": "ide",
-        "project_path": "D:\\Sohrab\\Project\\entitlement-api"
+        "project_path": "/home/sohrab/project/entitlement-api"
       },
       "claims": [
         {
@@ -211,7 +211,7 @@
         "host": "127.0.0.1",
         "port": "42104",
         "context": "ide",
-        "project_path": "D:\\Sohrab\\Project\\entitlement-projector"
+        "project_path": "/home/sohrab/project/entitlement-projector"
       },
       "claims": [
         {
@@ -243,7 +243,7 @@
         "host": "127.0.0.1",
         "port": "42105",
         "context": "ide",
-        "project_path": "D:\\Sohrab\\Project\\authz-sidecar"
+        "project_path": "/home/sohrab/project/authz-sidecar"
       },
       "claims": [
         {
@@ -275,7 +275,7 @@
         "host": "127.0.0.1",
         "port": "42106",
         "context": "ide",
-        "project_path": "D:\\Sohrab\\Project\\authz-openfga"
+        "project_path": "/home/sohrab/project/authz-openfga"
       },
       "claims": [
         {
@@ -341,7 +341,7 @@
         "host": "127.0.0.1",
         "port": "42108",
         "context": "ide",
-        "project_path": "D:\\Sohrab\\Project\\alaa-go-chi"
+        "project_path": "/home/sohrab/project/alaa-go-chi"
       },
       "claims": [
         {
