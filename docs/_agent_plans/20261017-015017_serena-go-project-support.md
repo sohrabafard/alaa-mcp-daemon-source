@@ -13,7 +13,7 @@
 - Machine state: not created
 - Base branch and commit: master, 2e592c3c50db119e16e5589edcb1fc8f78a47499
 - Work branch: master
-- Worktree: D:/Sohrab/Project/alaa-mcp-daemon-source
+- Worktree: /home/sohrab/project/alaa-mcp-daemon-source
 
 ## Summary and Outcome
 

@@ -305,8 +305,8 @@
       "autostart": true,
       "vars": {
         "node_path": "C:/Program Files/nodejs/node.exe",
-        "proxy_script": "D:/Sohrab/Project/alaa-mcp-daemon-source/alaa-mcp-daemon/dist/sentry-runtime/node_modules/mcp-proxy/dist/bin/mcp-proxy.mjs",
-        "sentry_script": "D:/Sohrab/Project/alaa-mcp-daemon-source/alaa-mcp-daemon/dist/sentry-runtime/node_modules/@sentry/mcp-server/dist/index.js",
+        "proxy_script": "/home/sohrab/project/alaa-mcp-daemon-source/alaa-mcp-daemon/dist/sentry-runtime/node_modules/mcp-proxy/dist/bin/mcp-proxy.mjs",
+        "sentry_script": "/home/sohrab/project/alaa-mcp-daemon-source/alaa-mcp-daemon/dist/sentry-runtime/node_modules/@sentry/mcp-server/dist/index.js",
         "sentry_host": "62.60.191.191:9000",
         "host": "127.0.0.1",
         "port": "42107"
